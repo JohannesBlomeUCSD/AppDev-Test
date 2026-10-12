@@ -32,7 +32,6 @@ def analyze_image_from_url(image_url: str):
     """Lädt ein Bild von einer URL herunter und schickt es an OpenAI"""
     today_str = datetime.now().strftime("%Y-%m-%d (%A)")
     
-    # Bild von der URL herunterladen
     response = requests.get(image_url)
     if response.status_code != 200:
         return None
@@ -76,39 +75,69 @@ def analyze_image_from_url(image_url: str):
 @app.post("/whatsapp-webhook")
 async def whatsapp_webhook(request: Request):
     """
-    Empfängt die Daten vom WhatsApp-Dienst, filtert Bilder heraus und verarbeitet sie.
+    Empfängt Daten von Green-API, filtert nach der Zielgruppe und verarbeitet Bilder.
     """
     data = await request.json()
     
-    # Hinweis: Die Struktur hängt leicht vom genauen WhatsApp-Dienst ab (z.B. Green-API).
-    # Hier fangen wir typischerweise die Bild-URL ab:
     try:
-        # Beispielhafter Zugriff auf das Bild (abhängig vom Gateway)
-        # Viele Dienste senden eine Nachricht, die einen Bild-Link enthält.
-        message_data = data.get("messageData", {})
-        file_message_data = message_data.get("fileMessageData", {})
-        image_url = file_message_data.get("downloadUrl") # URL des Bildes bei WhatsApp
+        type_webhook = data.get("typeWebhook")
         
-        if image_url:
-            print("Bild empfangen, starte KI-Analyse...")
-            event_data = analyze_image_from_url(image_url)
+        if type_webhook == "incomingMessageReceived":
+            # 1. Prüfen, aus welcher Gruppe / welchem Chat die Nachricht kommt
+            sender_data = data.get("senderData", {})
+            chat_name = sender_data.get("chatName", "")
             
-            if event_data:
-                # In SQLite-Datenbank speichern
-                conn = sqlite3.connect(DB_NAME)
-                cursor = conn.cursor()
-                cursor.execute("""
-                    INSERT INTO events (name, datum, ort)
-                    VALUES (?, ?, ?)
-                """, (event_data.get("name"), event_data.get("datum"), event_data.get("ort")))
-                conn.commit()
-                conn.close()
-                print("✅ Event erfolgreich aus WhatsApp-Bild extrahiert und gespeichert!")
+            TARGET_GROUP = "UCSD Internationals Events"
+            
+            # Wenn es nicht die Zielgruppe ist, brich sofort ab!
+            if chat_name != TARGET_GROUP:
+                print(f"Ignoriert: Nachricht kam aus Chat/Gruppe '{chat_name}'")
+                return {"status": "ignored"}
+
+            # 2. Prüfen, ob es ein Bild ist
+            message_data = data.get("messageData", {})
+            file_message_data = message_data.get("fileMessageData", {})
+            image_url = file_message_data.get("downloadUrl")
+            
+            if image_url:
+                print(f"📸 Bild aus Zielgruppe '{TARGET_GROUP}' empfangen, starte KI-Analyse...")
+                event_data = analyze_image_from_url(image_url)
+                
+                if event_data:
+                    # In SQLite-Datenbank speichern
+                    conn = sqlite3.connect(DB_NAME)
+                    cursor = conn.cursor()
+                    cursor.execute("""
+                        INSERT INTO events (name, datum, ort)
+                        VALUES (?, ?, ?)
+                    """, (event_data.get("name"), event_data.get("datum"), event_data.get("ort")))
+                    conn.commit()
+                    conn.close()
+                    print("✅ Event aus UCSD-Gruppe erfolgreich gespeichert!")
                 
     except Exception as e:
         print("Fehler beim Verarbeiten des Webhooks:", e)
 
     return {"status": "success"}
+
+@app.get("/events")
+def get_events_json():
+    """Gibt alle gespeicherten Events als JSON zurück (für die Website)"""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("SELECT name, datum, ort, created_at FROM events ORDER BY datum ASC")
+    rows = cursor.fetchall()
+    conn.close()
+    
+    events_list = []
+    for row in rows:
+        events_list.append({
+            "name": row[0],
+            "datum": row[1],
+            "ort": row[2],
+            "created_at": row[3]
+        })
+    return {"events": events_list}
 
 @app.get("/")
 def home():
