@@ -52,7 +52,7 @@ def analyze_image_from_url(image_url: str):
     """
 
     ai_response = client.chat.completions.create(
-        model="gpt-6-luna",
+        model="gpt-4o-mini",
         messages=[
             {
                 "role": "user",
