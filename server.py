@@ -19,6 +19,7 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             name TEXT,
             datum TEXT,
+            uhrzeit TEXT,
             ort TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
@@ -43,10 +44,11 @@ def analyze_image_from_url(image_url: str):
     Extrahiere folgende Informationen:
     - Name des Events (titel)
     - Datum des Events im Format YYYY-MM-DD (datum). Heute ist der {today_str}. Wenn ein relativer Begriff wie "Morgen" da steht, rechne es in das echte Datum um.
+    - Uhrzeit des Events im Format HH:MM (z.B. "19:00" oder "20:30") (uhrzeit). Falls keine Uhrzeit das steht, setze '?'.
     - Ort des Events / Adresse / Club / Online (ort)
 
-    Antworte AUSSCHLIESSLICH als valides JSON-Objekt mit genau diesen drei Schlüsseln:
-    {{"name": "...", "datum": "...", "ort": "..."}}
+    Antworte AUSSCHLIESSLICH als valides JSON-Objekt mit genau diesen vier Schlüsseln:
+    {{"name": "...", "datum": "...", "uhrzeit": "...", "ort": "..."}}
 
     Wenn eine Information im Bild absolut nicht zu finden ist, setze stattdessen ein einzelnes Fragezeichen '?' ein.
     """
@@ -104,12 +106,17 @@ async def whatsapp_webhook(request: Request):
                     conn = sqlite3.connect(DB_NAME)
                     cursor = conn.cursor()
                     cursor.execute("""
-                        INSERT INTO events (name, datum, ort)
-                        VALUES (?, ?, ?)
-                    """, (event_data.get("name"), event_data.get("datum"), event_data.get("ort")))
+                        INSERT INTO events (name, datum, uhrzeit, ort)
+                        VALUES (?, ?, ?, ?)
+                    """, (
+                        event_data.get("name"), 
+                        event_data.get("datum"), 
+                        event_data.get("uhrzeit"), 
+                        event_data.get("ort")
+                    ))
                     conn.commit()
                     conn.close()
-                    print("✅ Event erfolgreich gespeichert!")
+                    print("✅ Event mit Uhrzeit erfolgreich gespeichert!")
             else:
                 print("ℹ️ Webhook empfangen, aber keine Bild-URL (downloadUrl) in messageData gefunden.")
                 
@@ -117,12 +124,13 @@ async def whatsapp_webhook(request: Request):
         print("❌ Fehler beim Verarbeiten des Webhooks:", e)
 
     return {"status": "success"}
+
 @app.get("/events")
 def get_events_json():
     """Gibt alle gespeicherten Events als JSON zurück (für die Website)"""
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    cursor.execute("SELECT name, datum, ort, created_at FROM events ORDER BY datum ASC")
+    cursor.execute("SELECT name, datum, uhrzeit, ort, created_at FROM events ORDER BY datum ASC")
     rows = cursor.fetchall()
     conn.close()
     
@@ -131,8 +139,9 @@ def get_events_json():
         events_list.append({
             "name": row[0],
             "datum": row[1],
-            "ort": row[2],
-            "created_at": row[3]
+            "uhrzeit": row[2],
+            "ort": row[3],
+            "created_at": row[4]
         })
     return {"events": events_list}
 
