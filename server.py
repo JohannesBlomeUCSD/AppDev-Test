@@ -75,20 +75,30 @@ def analyze_image_from_url(image_url: str):
 @app.post("/whatsapp-webhook")
 async def whatsapp_webhook(request: Request):
     data = await request.json()
+    print("--- NEUER WEBHOOK EINGETROFFEN ---")
+    print(json.dumps(data, indent=2))
     
     try:
         type_webhook = data.get("typeWebhook")
         
-        # Wir akzeptieren jetzt sowohl incoming als auch outgoing Nachrichten
         if type_webhook in ["incomingMessageReceived", "outgoingMessageReceived"]:
-            
             message_data = data.get("messageData", {})
-            file_message_data = message_data.get("fileMessageData", {})
-            image_url = file_message_data.get("downloadUrl")
             
+            # Wir suchen die Bild-URL an verschiedenen möglichen Stellen:
+            image_url = None
+            
+            # 1. Standard Fall (fileMessageData)
+            if "fileMessageData" in message_data:
+                image_url = message_data.get("fileMessageData", {}).get("downloadUrl")
+                
+            # 2. Alternativer Fall (imageMessageData)
+            if not image_url and "imageMessageData" in message_data:
+                image_url = message_data.get("imageMessageData", {}).get("downloadUrl")
+
             if image_url:
-                print("📸 Bild gefunden, starte KI-Analyse...")
+                print(f"📸 Bild-URL gefunden: {image_url}, starte KI-Analyse...")
                 event_data = analyze_image_from_url(image_url)
+                print(f"🤖 KI-Ergebnis: {event_data}")
                 
                 if event_data:
                     conn = sqlite3.connect(DB_NAME)
@@ -100,7 +110,9 @@ async def whatsapp_webhook(request: Request):
                     conn.commit()
                     conn.close()
                     print("✅ Event erfolgreich gespeichert!")
-                    
+            else:
+                print("ℹ️ Webhook empfangen, aber keine Bild-URL (downloadUrl) in messageData gefunden.")
+                
     except Exception as e:
         print("❌ Fehler beim Verarbeiten des Webhooks:", e)
 
