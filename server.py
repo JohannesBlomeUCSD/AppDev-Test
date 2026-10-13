@@ -23,9 +23,15 @@ def init_db():
             uhrzeit TEXT,
             ort TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        ),
+        CREATE TABLE IF NOT EXISTS event_attendees (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_id INTEGER,
+            participant_name TEXT,
+            FOREIGN KEY (event_id) REFERENCES events (id)
         )
     """)
-    
+
     # Automatisch prüfen, ob die Spalte 'uhrzeit' in einer älteren DB fehlt, und hinzufügen
     cursor.execute("PRAGMA table_info(events)")
     columns = [col[1] for col in cursor.fetchall()]
@@ -140,13 +146,35 @@ def get_events_json():
     events_list = []
     for row in rows:
         events_list.append({
-            "name": row[0],
-            "datum": row[1],
-            "uhrzeit": row[2],
-            "ort": row[3],
-            "created_at": row[4]
+                    "id": row[0],       
+                    "name": row[1],
+                    "datum": row[2],
+                    "uhrzeit": row[3],
+                    "ort": row[4],
+                    "created_at": row[5]
         })
     return {"events": events_list}
+
+@app.get("/events/{event_id}/attendees")
+def get_attendees(event_id: int):
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    cursor.execute("SELECT participant_name FROM event_attendees WHERE event_id = ?", (event_id,))
+    rows = cursor.fetchall()
+    conn.close()
+    return {"attendees": [row[0] for row in rows]}
+
+@app.post("/events/{event_id}/attendees")
+def add_attendee(event_id: int, data: dict):
+    name = data.get("name", "").strip()
+    if name:
+        conn = sqlite3.connect(DB_NAME)
+        cursor = conn.cursor()
+        cursor.execute("INSERT INTO event_attendees (event_id, participant_name) VALUES (?, ?)", (event_id, name))
+        conn.commit()
+        conn.close()
+        return {"status": "success"}
+    return {"status": "error", "message": "Name ist leer"}
 
 @app.get("/")
 def home():
