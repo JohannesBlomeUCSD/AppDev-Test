@@ -72,39 +72,25 @@ def analyze_image_from_url(image_url: str):
 
     return json.loads(ai_response.choices[0].message.content)
 
-@app.post("/whatsapp-webhook")  
+@app.post("/whatsapp-webhook")
 async def whatsapp_webhook(request: Request):
-    """
-    Empfängt Daten von Green-API, filtert nach der Zielgruppe und verarbeitet Bilder.
-    """
     data = await request.json()
-    print("Eingehender Webhook:", json.dumps(data)) # <-- Das zeigt uns den genauen Inhalt
+    
     try:
         type_webhook = data.get("typeWebhook")
         
-        if type_webhook == "incomingMessageReceived":
-            # 1. Prüfen, aus welcher Gruppe / welchem Chat die Nachricht kommt
-            sender_data = data.get("senderData", {})
-            chat_name = sender_data.get("chatName", "")
+        # Wir akzeptieren jetzt sowohl incoming als auch outgoing Nachrichten
+        if type_webhook in ["incomingMessageReceived", "outgoingMessageReceived"]:
             
-            TARGET_GROUP = "UCSD Internationals Events"
-            
-            # # Wenn es nicht die Zielgruppe ist, brich sofort ab!
-            # if chat_name != TARGET_GROUP:
-            #     print(f"Ignoriert: Nachricht kam aus Chat/Gruppe '{chat_name}'")
-            #     return {"status": "ignored"}
-
-            # 2. Prüfen, ob es ein Bild ist
             message_data = data.get("messageData", {})
             file_message_data = message_data.get("fileMessageData", {})
             image_url = file_message_data.get("downloadUrl")
             
             if image_url:
-                print(f"📸 Bild aus Zielgruppe '{TARGET_GROUP}' empfangen, starte KI-Analyse...")
+                print("📸 Bild gefunden, starte KI-Analyse...")
                 event_data = analyze_image_from_url(image_url)
                 
                 if event_data:
-                    # In SQLite-Datenbank speichern
                     conn = sqlite3.connect(DB_NAME)
                     cursor = conn.cursor()
                     cursor.execute("""
@@ -113,13 +99,12 @@ async def whatsapp_webhook(request: Request):
                     """, (event_data.get("name"), event_data.get("datum"), event_data.get("ort")))
                     conn.commit()
                     conn.close()
-                    print("✅ Event aus UCSD-Gruppe erfolgreich gespeichert!")
-                
+                    print("✅ Event erfolgreich gespeichert!")
+                    
     except Exception as e:
-        print("Fehler beim Verarbeiten des Webhooks:", e)
+        print("❌ Fehler beim Verarbeiten des Webhooks:", e)
 
     return {"status": "success"}
-
 @app.get("/events")
 def get_events_json():
     """Gibt alle gespeicherten Events als JSON zurück (für die Website)"""
