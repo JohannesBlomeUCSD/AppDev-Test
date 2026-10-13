@@ -72,7 +72,7 @@ def analyze_image_from_url(image_url: str):
 
     return json.loads(ai_response.choices[0].message.content)
 
-
+@app.post("/whatsapp-webhook")  
 async def whatsapp_webhook(request: Request):
     """
     Empfängt Daten von Green-API, filtert nach der Zielgruppe und verarbeitet Bilder.
