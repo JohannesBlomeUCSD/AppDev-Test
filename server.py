@@ -89,10 +89,10 @@ async def whatsapp_webhook(request: Request):
             
             TARGET_GROUP = "UCSD Internationals Events"
             
-            # Wenn es nicht die Zielgruppe ist, brich sofort ab!
-            if chat_name != TARGET_GROUP:
-                print(f"Ignoriert: Nachricht kam aus Chat/Gruppe '{chat_name}'")
-                return {"status": "ignored"}
+            # # Wenn es nicht die Zielgruppe ist, brich sofort ab!
+            # if chat_name != TARGET_GROUP:
+            #     print(f"Ignoriert: Nachricht kam aus Chat/Gruppe '{chat_name}'")
+            #     return {"status": "ignored"}
 
             # 2. Prüfen, ob es ein Bild ist
             message_data = data.get("messageData", {})
