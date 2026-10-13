@@ -14,6 +14,7 @@ DB_NAME = "events.db"
 def init_db():
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
+    # Tabelle erstellen, falls sie noch gar nicht existiert
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS events (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -24,6 +25,13 @@ def init_db():
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
+    
+    # Automatisch prüfen, ob die Spalte 'uhrzeit' in einer älteren DB fehlt, und hinzufügen
+    cursor.execute("PRAGMA table_info(events)")
+    columns = [col[1] for col in cursor.fetchall()]
+    if "uhrzeit" not in columns:
+        cursor.execute("ALTER TABLE events ADD COLUMN uhrzeit TEXT")
+
     conn.commit()
     conn.close()
 
@@ -86,14 +94,9 @@ async def whatsapp_webhook(request: Request):
         if type_webhook in ["incomingMessageReceived", "outgoingMessageReceived"]:
             message_data = data.get("messageData", {})
             
-            # Wir suchen die Bild-URL an verschiedenen möglichen Stellen:
             image_url = None
-            
-            # 1. Standard Fall (fileMessageData)
             if "fileMessageData" in message_data:
                 image_url = message_data.get("fileMessageData", {}).get("downloadUrl")
-                
-            # 2. Alternativer Fall (imageMessageData)
             if not image_url and "imageMessageData" in message_data:
                 image_url = message_data.get("imageMessageData", {}).get("downloadUrl")
 
